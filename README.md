@@ -7,10 +7,11 @@ This is a prototype implementation of the [`hohn/mrvahepc`](https://github.com/h
 ## Features
 
 - **Multiple Storage Backends**: Support for local filesystem and Google Cloud Storage
-- **Database File Serving**: Serve CodeQL database `.zip` files
-- **Metadata API**: Query database metadata from SQLite in JSONL format
+- **Dynamic Database Discovery**: Automatically discovers CodeQL databases from directory structures
+- **Database File Serving**: Serve CodeQL database `.zip` files or unarchived databases
+- **Metadata API**: Query database metadata in JSONL format
 - **Standards-Based**: Compatible with the MRVA HEPC interface specification
-- **Pure Go**: Uses `modernc.org/sqlite` for CGO-free SQLite support
+- **Comprehensive Testing**: 75%+ test coverage using real GCS emulation via [fake-gcs-server](https://github.com/fsouza/fake-gcs-server)
 - **GCS Authentication**: Supports service account keys and Application Default Credentials (ADC)
 
 ## Installation
@@ -149,12 +150,16 @@ Minimal IAM role: **Storage Object Viewer** (`roles/storage.objectViewer`)
 
 ## Storage Structure
 
+The server dynamically discovers CodeQL databases from the storage backend by scanning for `codeql-database.yml` files or `.zip` archives.
+
 ### Local Filesystem
 
 ```
 db-collection/
-├── metadata.sql           # SQLite database with metadata table
-├── owner-repo-xxx.zip     # CodeQL database files
+├── owner-repo-xxx.zip              # Archived CodeQL database
+├── owner-repo-yyy/                 # Unarchived CodeQL database
+│   ├── codeql-database.yml         # Database metadata
+│   └── db-<language>/              # Language-specific data
 └── ...
 ```
 
@@ -162,49 +167,71 @@ db-collection/
 
 ```
 gs://my-bucket/
-├── [prefix/]metadata.sql  # SQLite database with metadata table
-├── [prefix/]owner-repo-xxx.zip
+├── [prefix/]owner-repo-xxx/        # Unarchived CodeQL database
+│   ├── codeql-database.yml         # Database metadata  
+│   └── db-<language>/              # Language-specific data
 └── ...
 ```
 
-### Metadata Schema
+> **Note**: For GCS, only unarchived databases are supported. Archived `.zip` files require downloading the entire archive to read metadata, which is not acceptable for large databases.
 
-The `metadata.sql` SQLite database should have a `metadata` table with these columns:
+## Testing
 
-| Column                  | Type    | Description                            |
-|-------------------------|---------|----------------------------------------|
-| `content_hash`          | TEXT    | SHA-256 hash of database file (PK)     |
-| `build_cid`             | TEXT    | Build context identifier               |
-| `git_branch`            | TEXT    | Git branch name                        |
-| `git_commit_id`         | TEXT    | Git commit SHA                         |
-| `git_owner`             | TEXT    | Repository owner                       |
-| `git_repo`              | TEXT    | Repository name                        |
-| `ingestion_datetime_utc`| TEXT    | Database creation timestamp            |
-| `primary_language`      | TEXT    | Primary programming language           |
-| `result_url`            | TEXT    | Download URL for the database          |
-| `tool_name`             | TEXT    | CodeQL tool name                       |
-| `tool_version`          | TEXT    | CodeQL CLI version                     |
-| `projname`              | TEXT    | Project name (owner/repo)              |
-| `db_file_size`          | INTEGER | Database file size in bytes            |
+The project has comprehensive test coverage (~75%) including:
+
+- **Unit tests** for all packages
+- **Integration tests** for GCS using [fake-gcs-server](https://github.com/fsouza/fake-gcs-server)
+- **Race detection** enabled in CI
+
+```bash
+# Run all tests
+go test -v -race ./...
+
+# Run tests with coverage
+go test -v -race -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out
+
+# Run specific package tests
+go test -v ./internal/storage/gcs/...
+```
+
+### Test Coverage by Package
+
+| Package | Coverage |
+|---------|----------|
+| `api/` | 100% |
+| `internal/codeql/` | 84% |
+| `internal/server/` | 74% |
+| `internal/storage/` | 100% |
+| `internal/storage/gcs/` | 85% |
+| `internal/storage/local/` | 91% |
 
 ## Project Structure
 
 ```
 mrva-go-hepc/
 ├── api/                        # Public API types
-│   └── types.go                # DatabaseMetadata struct
+│   ├── types.go                # DatabaseMetadata struct
+│   └── types_test.go
 ├── cmd/
 │   └── hepc-server/            # Server executable
 │       └── main.go
 ├── internal/
+│   ├── codeql/                 # CodeQL database discovery
+│   │   ├── discovery.go
+│   │   └── discovery_test.go
 │   ├── server/                 # HTTP server implementation
-│   │   └── server.go
+│   │   ├── server.go
+│   │   └── server_test.go
 │   └── storage/                # Storage backend abstraction
 │       ├── storage.go          # Backend interface
+│       ├── storage_test.go
 │       ├── local/              # Local filesystem backend
-│       │   └── local.go
+│       │   ├── local.go
+│       │   └── local_test.go
 │       └── gcs/                # Google Cloud Storage backend
-│           └── gcs.go
+│           ├── gcs.go
+│           └── gcs_test.go     # Uses fake-gcs-server
 ├── go.mod
 ├── go.sum
 └── README.md
