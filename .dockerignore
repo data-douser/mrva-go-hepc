@@ -1,0 +1,33 @@
+# Docker build artifacts
+bin/
+coverage.out
+*.test
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation (keep README for reference)
+docs/
+*.md
+!README.md
+
+# Test data
+testdata/
+*_test.go
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+Makefile
+
+# OS files
+.DS_Store
+Thumbs.db

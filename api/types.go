@@ -2,7 +2,8 @@
 package api
 
 // DatabaseMetadata represents metadata for a CodeQL database entry.
-// This matches the schema from the Python reference implementation's SQLite table.
+// This matches the schema from the Python reference implementation's SQLite table,
+// with additional fields for compatibility with mrvacommander HepcStore.
 type DatabaseMetadata struct {
 	// ContentHash is the SHA-256 hash of the database file (primary key in SQLite).
 	ContentHash string `json:"content_hash" db:"content_hash"`
@@ -32,6 +33,10 @@ type DatabaseMetadata struct {
 
 	// ResultURL is the URL where the database file can be downloaded.
 	ResultURL string `json:"result_url" db:"result_url"`
+
+	// ToolID is the unique identifier for the CodeQL tool/extractor
+	// (required by mrvacommander HepcStore). Format: "codeql-<language>".
+	ToolID string `json:"tool_id" db:"tool_id"`
 
 	// ToolName is the name of the CodeQL tool (e.g., "codeql-javascript").
 	ToolName string `json:"tool_name" db:"tool_name"`

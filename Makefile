@@ -142,15 +142,58 @@ local-test: build ## Build and run a local test server
 	@mkdir -p test-db-collection
 	@$(GOBIN)/$(BINARY_NAME) --storage local --db-dir test-db-collection
 
+# Docker configuration
+DOCKER_REGISTRY ?= ghcr.io
+DOCKER_IMAGE ?= $(DOCKER_REGISTRY)/data-douser/codeql-mrva-hepc
+DOCKER_TAG ?= $(VERSION)
+
 .PHONY: docker-build
-docker-build: ## Build Docker image (if Dockerfile exists)
-	@if [ -f Dockerfile ]; then \
-		echo "$(COLOR_GREEN)Building Docker image...$(COLOR_RESET)"; \
-		docker build -t mrva-go-hepc:$(VERSION) .; \
-		echo "$(COLOR_GREEN)✓ Docker image built: mrva-go-hepc:$(VERSION)$(COLOR_RESET)"; \
-	else \
-		echo "$(COLOR_YELLOW)No Dockerfile found$(COLOR_RESET)"; \
+docker-build: ## Build Docker image
+	@echo "$(COLOR_GREEN)Building Docker image...$(COLOR_RESET)"
+	docker build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg COMMIT=$(COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		-t $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		-t $(DOCKER_IMAGE):latest \
+		.
+	@echo "$(COLOR_GREEN)✓ Docker image built: $(DOCKER_IMAGE):$(DOCKER_TAG)$(COLOR_RESET)"
+
+.PHONY: docker-push
+docker-push: ## Push Docker image to registry
+	@echo "$(COLOR_GREEN)Pushing Docker image to $(DOCKER_REGISTRY)...$(COLOR_RESET)"
+	docker push $(DOCKER_IMAGE):$(DOCKER_TAG)
+	docker push $(DOCKER_IMAGE):latest
+	@echo "$(COLOR_GREEN)✓ Docker image pushed$(COLOR_RESET)"
+
+.PHONY: docker-run
+docker-run: ## Run Docker container locally (requires DB_DIR env var)
+	@if [ -z "$(DB_DIR)" ]; then \
+		echo "$(COLOR_YELLOW)Usage: make docker-run DB_DIR=/path/to/db-collection$(COLOR_RESET)"; \
+		echo "$(COLOR_YELLOW)Or run without data: docker run -p 8070:8070 $(DOCKER_IMAGE):$(DOCKER_TAG) --storage local --db-dir /tmp$(COLOR_RESET)"; \
+		exit 1; \
 	fi
+	@echo "$(COLOR_GREEN)Running Docker container...$(COLOR_RESET)"
+	docker run -p 8070:8070 -v $(DB_DIR):/data:ro $(DOCKER_IMAGE):$(DOCKER_TAG)
+
+.PHONY: docker-run-gcs
+docker-run-gcs: ## Run Docker container with GCS backend (requires GCS_BUCKET)
+	@if [ -z "$(GCS_BUCKET)" ]; then \
+		echo "$(COLOR_YELLOW)Usage: make docker-run-gcs GCS_BUCKET=my-bucket$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+	@echo "$(COLOR_GREEN)Running Docker container with GCS backend...$(COLOR_RESET)"
+	docker run -p 8070:8070 \
+		-v ~/.config/gcloud:/root/.config/gcloud:ro \
+		$(DOCKER_IMAGE):$(DOCKER_TAG) \
+		--storage gcs --gcs-bucket $(GCS_BUCKET) --host 0.0.0.0 --port 8070
+
+.PHONY: docker-clean
+docker-clean: ## Remove local Docker images
+	@echo "$(COLOR_GREEN)Removing local Docker images...$(COLOR_RESET)"
+	-docker rmi $(DOCKER_IMAGE):$(DOCKER_TAG) 2>/dev/null || true
+	-docker rmi $(DOCKER_IMAGE):latest 2>/dev/null || true
+	@echo "$(COLOR_GREEN)✓ Docker images removed$(COLOR_RESET)"
 
 .PHONY: version
 version: ## Show version information

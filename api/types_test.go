@@ -4,6 +4,7 @@ package api
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -18,6 +19,7 @@ func TestDatabaseMetadata_JSONMarshal(t *testing.T) {
 		IngestionDatetimeUTC: "2024-01-15T10:30:00Z",
 		PrimaryLanguage:      "go",
 		ResultURL:            "http://localhost:8080/db/testrepo.zip",
+		ToolID:               "codeql-go",
 		ToolName:             "codeql-go",
 		ToolVersion:          "2.15.0",
 		Projname:             "testowner/testrepo",
@@ -45,6 +47,7 @@ func TestDatabaseMetadata_JSONMarshal(t *testing.T) {
 		"ingestion_datetime_utc": "2024-01-15T10:30:00Z",
 		"primary_language":       "go",
 		"result_url":             "http://localhost:8080/db/testrepo.zip",
+		"tool_id":                "codeql-go",
 		"tool_name":              "codeql-go",
 		"tool_version":           "2.15.0",
 		"projname":               "testowner/testrepo",
@@ -74,6 +77,7 @@ func TestDatabaseMetadata_JSONUnmarshal(t *testing.T) {
 		"ingestion_datetime_utc": "2024-02-20T15:45:00Z",
 		"primary_language": "python",
 		"result_url": "http://example.com/db/repo.zip",
+		"tool_id": "codeql-python",
 		"tool_name": "codeql-python",
 		"tool_version": "2.16.0",
 		"projname": "anotherowner/anotherrepo",
@@ -112,6 +116,9 @@ func TestDatabaseMetadata_JSONUnmarshal(t *testing.T) {
 	if meta.ResultURL != "http://example.com/db/repo.zip" {
 		t.Errorf("ResultURL = %q, want %q", meta.ResultURL, "http://example.com/db/repo.zip")
 	}
+	if meta.ToolID != "codeql-python" {
+		t.Errorf("ToolID = %q, want %q", meta.ToolID, "codeql-python")
+	}
 	if meta.ToolName != "codeql-python" {
 		t.Errorf("ToolName = %q, want %q", meta.ToolName, "codeql-python")
 	}
@@ -137,6 +144,7 @@ func TestDatabaseMetadata_RoundTrip(t *testing.T) {
 		IngestionDatetimeUTC: "2024-03-01T00:00:00Z",
 		PrimaryLanguage:      "javascript",
 		ResultURL:            "https://storage.example.com/db.zip",
+		ToolID:               "codeql-javascript",
 		ToolName:             "codeql-javascript",
 		ToolVersion:          "2.14.0",
 		Projname:             "myorg/myproject",
@@ -179,7 +187,7 @@ func TestDatabaseMetadata_ZeroValue(t *testing.T) {
 	stringFields := []string{
 		"content_hash", "build_cid", "git_branch", "git_commit_id",
 		"git_owner", "git_repo", "ingestion_datetime_utc", "primary_language",
-		"result_url", "tool_name", "tool_version", "projname",
+		"result_url", "tool_id", "tool_name", "tool_version", "projname",
 	}
 
 	for _, field := range stringFields {
@@ -316,6 +324,7 @@ func TestDatabaseMetadata_DBTags(t *testing.T) {
 		"IngestionDatetimeUTC": "ingestion_datetime_utc",
 		"PrimaryLanguage":      "primary_language",
 		"ResultURL":            "result_url",
+		"ToolID":               "tool_id",
 		"ToolName":             "tool_name",
 		"ToolVersion":          "tool_version",
 		"Projname":             "projname",
@@ -350,6 +359,7 @@ func TestDatabaseMetadata_JSONTags(t *testing.T) {
 		"IngestionDatetimeUTC": "ingestion_datetime_utc",
 		"PrimaryLanguage":      "primary_language",
 		"ResultURL":            "result_url",
+		"ToolID":               "tool_id",
 		"ToolName":             "tool_name",
 		"ToolVersion":          "tool_version",
 		"Projname":             "projname",
@@ -421,5 +431,143 @@ func TestDatabaseMetadata_LargeFileSize(t *testing.T) {
 
 	if restored.DBFileSize != meta.DBFileSize {
 		t.Errorf("DBFileSize = %d, want %d", restored.DBFileSize, meta.DBFileSize)
+	}
+}
+
+// HepcResult mirrors the mrvacommander/pkg/qldbstore HepcResult struct.
+// This is used to verify schema compatibility with the consumer.
+type HepcResult struct {
+	GitBranch         string `json:"git_branch"`
+	GitCommitID       string `json:"git_commit_id"`
+	GitRepo           string `json:"git_repo"`
+	IngestionDatetime string `json:"ingestion_datetime_utc"`
+	ResultURL         string `json:"result_url"`
+	ToolID            string `json:"tool_id"`
+	ToolName          string `json:"tool_name"`
+	ToolVersion       string `json:"tool_version"`
+	Projname          string `json:"projname"`
+}
+
+// TestHepcStoreSchemaCompatibility verifies that DatabaseMetadata JSON output
+// can be successfully parsed by mrvacommander's HepcStore.fetchViaHTTP().
+// This is a critical compatibility test for the MRVA system integration.
+func TestHepcStoreSchemaCompatibility(t *testing.T) {
+	// Create metadata matching what hepc-server would produce
+	metadata := DatabaseMetadata{
+		ContentHash:          "abc123def456",
+		BuildCID:             "build-001",
+		GitBranch:            "HEAD",
+		GitCommitID:          "1234567890abcdef",
+		GitOwner:             "testorg",
+		GitRepo:              "testrepo",
+		IngestionDatetimeUTC: "2024-01-15T10:30:00Z",
+		PrimaryLanguage:      "javascript",
+		ResultURL:            "http://hepc:8070/db/testrepo.zip",
+		ToolID:               "codeql-javascript",
+		ToolName:             "codeql-javascript",
+		ToolVersion:          "2.15.0",
+		Projname:             "testorg/testrepo",
+		DBFileSize:           1024000,
+	}
+
+	// Marshal to JSON (simulating HEPC server response)
+	jsonData, err := json.Marshal(metadata)
+	if err != nil {
+		t.Fatalf("failed to marshal DatabaseMetadata: %v", err)
+	}
+
+	// Parse as HepcResult (simulating mrvacommander consumer)
+	var result HepcResult
+	if err := json.Unmarshal(jsonData, &result); err != nil {
+		t.Fatalf("failed to unmarshal as HepcResult: %v", err)
+	}
+
+	// Verify all required fields for HepcStore are populated
+	if result.GitBranch != "HEAD" {
+		t.Errorf("GitBranch = %q, want %q", result.GitBranch, "HEAD")
+	}
+	if result.GitCommitID != "1234567890abcdef" {
+		t.Errorf("GitCommitID = %q, want %q", result.GitCommitID, "1234567890abcdef")
+	}
+	if result.GitRepo != "testrepo" {
+		t.Errorf("GitRepo = %q, want %q", result.GitRepo, "testrepo")
+	}
+	if result.IngestionDatetime != "2024-01-15T10:30:00Z" {
+		t.Errorf("IngestionDatetime = %q, want %q", result.IngestionDatetime, "2024-01-15T10:30:00Z")
+	}
+	if result.ResultURL != "http://hepc:8070/db/testrepo.zip" {
+		t.Errorf("ResultURL = %q, want %q", result.ResultURL, "http://hepc:8070/db/testrepo.zip")
+	}
+	if result.ToolID != "codeql-javascript" {
+		t.Errorf("ToolID = %q, want %q", result.ToolID, "codeql-javascript")
+	}
+	if result.ToolName != "codeql-javascript" {
+		t.Errorf("ToolName = %q, want %q", result.ToolName, "codeql-javascript")
+	}
+	if result.ToolVersion != "2.15.0" {
+		t.Errorf("ToolVersion = %q, want %q", result.ToolVersion, "2.15.0")
+	}
+	if result.Projname != "testorg/testrepo" {
+		t.Errorf("Projname = %q, want %q", result.Projname, "testorg/testrepo")
+	}
+}
+
+// TestHepcStoreJSONLFormat tests that multiple metadata records can be
+// streamed as JSONL (newline-delimited JSON), which is the format expected
+// by HepcStore.fetchViaHTTP().
+func TestHepcStoreJSONLFormat(t *testing.T) {
+	records := []DatabaseMetadata{
+		{
+			GitBranch:            "HEAD",
+			GitRepo:              "repo1",
+			IngestionDatetimeUTC: "2024-01-01T00:00:00Z",
+			ResultURL:            "http://hepc:8070/db/repo1.zip",
+			ToolID:               "codeql-go",
+			ToolName:             "codeql-go",
+			ToolVersion:          "2.15.0",
+			Projname:             "org/repo1",
+		},
+		{
+			GitBranch:            "main",
+			GitRepo:              "repo2",
+			IngestionDatetimeUTC: "2024-01-02T00:00:00Z",
+			ResultURL:            "http://hepc:8070/db/repo2.zip",
+			ToolID:               "codeql-python",
+			ToolName:             "codeql-python",
+			ToolVersion:          "2.16.0",
+			Projname:             "org/repo2",
+		},
+	}
+
+	// Simulate JSONL output (one JSON object per line)
+	var jsonlBuilder strings.Builder
+	encoder := json.NewEncoder(&jsonlBuilder)
+	for _, record := range records {
+		if err := encoder.Encode(record); err != nil {
+			t.Fatalf("failed to encode record: %v", err)
+		}
+	}
+	jsonlContent := jsonlBuilder.String()
+
+	// Simulate HepcStore parsing (line by line JSON decoding)
+	decoder := json.NewDecoder(strings.NewReader(jsonlContent))
+	var parsedResults []HepcResult
+	for decoder.More() {
+		var result HepcResult
+		if err := decoder.Decode(&result); err != nil {
+			t.Fatalf("failed to decode JSONL line: %v", err)
+		}
+		parsedResults = append(parsedResults, result)
+	}
+
+	if len(parsedResults) != 2 {
+		t.Fatalf("parsed %d results, want 2", len(parsedResults))
+	}
+
+	if parsedResults[0].GitRepo != "repo1" {
+		t.Errorf("first result GitRepo = %q, want %q", parsedResults[0].GitRepo, "repo1")
+	}
+	if parsedResults[1].GitRepo != "repo2" {
+		t.Errorf("second result GitRepo = %q, want %q", parsedResults[1].GitRepo, "repo2")
 	}
 }
