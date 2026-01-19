@@ -4,7 +4,7 @@
 # ============================================================================
 # Stage 1: Build the Go binary
 # ============================================================================
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install git for version information and ca-certificates for HTTPS
 RUN apk add --no-cache git ca-certificates
@@ -34,8 +34,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 # ============================================================================
 FROM alpine:3.20
 
-# Install ca-certificates for HTTPS (required for GCS)
-RUN apk --no-cache add ca-certificates tzdata
+# Install ca-certificates for HTTPS (required for GCS) and wget for healthcheck
+RUN apk --no-cache add ca-certificates tzdata wget
 
 # Create non-root user for security
 RUN adduser -D -g '' hepc
