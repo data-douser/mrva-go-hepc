@@ -136,6 +136,8 @@ run: ## Run the server with local storage (requires --db-dir)
 .PHONY: test
 test: ## Run tests
 	@echo "$(COLOR_GREEN)Running tests...$(COLOR_RESET)"
+	# Note: -covermode=atomic is used for compatibility with -race flag
+	# This ensures accurate coverage reporting when race detector is enabled
 	go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 	@echo "$(COLOR_GREEN)✓ Tests passed$(COLOR_RESET)"
 
@@ -212,7 +214,7 @@ docker-run-gcs: ## Run Docker container with GCS backend (requires GCS_BUCKET)
 	fi
 	@echo "$(COLOR_GREEN)Running Docker container with GCS backend...$(COLOR_RESET)"
 	docker run -p 8070:8070 \
-		-v ~/.config/gcloud:/root/.config/gcloud:ro \
+		-v ~/.config/gcloud:/home/hepc/.config/gcloud:ro \
 		$(DOCKER_IMAGE):$(DOCKER_TAG) \
 		--storage gcs --gcs-bucket $(GCS_BUCKET) --host 0.0.0.0 --port 8070
 
