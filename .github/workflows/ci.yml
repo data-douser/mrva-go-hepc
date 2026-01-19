@@ -55,37 +55,29 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-go-${{ matrix.go-version }}-
 
-    - name: Run 'go mod download'
-      run: go mod download
+    - name: Run 'make install-tools'
+      run: make install-tools
 
-    - name: Run 'go mod verify'
-      run: go mod verify
+    - name: Run 'make deps'
+      run: make deps
 
-    - name: Run 'gofmt' format check
-      run: |
-        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-          echo "Code is not formatted:"
-          gofmt -s -l .
-          exit 1
-        fi
+    - name: Run 'make verify'
+      run: make verify
 
-    - name: Run 'go vet'
-      run: go vet ./...
+    - name: Run 'make fmt-check'
+      run: make fmt-check
 
-    - name: Run 'go build'
-      run: go build -v ./cmd/hepc-server
+    - name: Run 'make vet'
+      run: make vet
 
-    - name: Run 'go test' with coverage reporting and race detection
-      run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+    - name: Run 'make build'
+      run: make build
 
-    - name: Run 'go tool cover' to check test coverage threshold
-      run: |
-        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
-        echo "Total coverage: ${COVERAGE}%"
-        if (( $(echo "$COVERAGE < 70" | bc -l) )); then
-          echo "Coverage ${COVERAGE}% is below 70% threshold"
-          exit 1
-        fi
+    - name: Run 'make test'
+      run: make test
+
+    - name: Run 'make coverage-check'
+      run: make coverage-check
 
     - name: Upload test coverage report
       uses: actions/upload-artifact@v6
