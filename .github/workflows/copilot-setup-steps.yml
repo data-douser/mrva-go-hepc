@@ -1,0 +1,76 @@
+name: 'Copilot Setup Steps'
+
+on:
+  # Automatically run the setup steps when an associated workflow is changed.
+  push:
+    paths:
+      - '.github/workflows/copilot-setup-steps.yml'
+      - 'go.mod'
+      - 'go.sum'
+  pull_request:
+    paths:
+      - '.github/workflows/copilot-setup-steps.yml'
+      - 'go.mod'
+      - 'go.sum'
+  # Allow manual testing through the repository's "Actions" tab
+  workflow_dispatch: {}
+
+jobs:
+  # The job MUST be called `copilot-setup-steps` or it will not be picked up by Copilot.
+  copilot-setup-steps:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Copilot Setup - Checkout code
+        uses: actions/checkout@v6
+
+      - name: Copilot Setup - Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+
+      - name: Copilot Setup - Run 'make install-tools'
+        run: make install-tools
+
+      - name: Cache Go modules
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-1.25-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-1.25-
+
+      - name: Run 'make deps'
+        run: make deps
+
+      - name: Run 'make verify'
+        run: make verify
+
+      - name: Run 'make fmt-check'
+        run: make fmt-check
+
+      - name: Run 'make vet'
+        run: make vet
+
+      - name: Run 'make build'
+        run: make build
+
+      - name: Copilot Setup - Create pre-commit hook
+        run: |
+          cat > .git/hooks/pre-commit << 'EOF'
+          #!/bin/sh
+
+          # Enforce linting and formatting checks before committing changes
+          if ! make check
+          then
+              echo "'make check' failed. Please fix the problem(s) and try again."
+              exit 1
+          fi
+
+          exit 0
+          EOF
+          chmod +x .git/hooks/pre-commit

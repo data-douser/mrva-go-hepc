@@ -163,10 +163,12 @@ func (b *Backend) convertToMetadata(db *codeql.DiscoveredDatabase) api.DatabaseM
 	}
 	resultURL := fmt.Sprintf("%s/db/%s", strings.TrimSuffix(b.endpointURL, "/"), relPath)
 
-	// Determine tool name
+	// Determine tool name and tool ID
 	toolName := "codeql"
+	toolID := "codeql"
 	if db.Language != "" && db.Language != "unknown" {
 		toolName = fmt.Sprintf("codeql-%s", db.Language)
+		toolID = toolName // tool_id matches tool_name format
 	}
 
 	return api.DatabaseMetadata{
@@ -179,6 +181,7 @@ func (b *Backend) convertToMetadata(db *codeql.DiscoveredDatabase) api.DatabaseM
 		IngestionDatetimeUTC: creationTime,
 		PrimaryLanguage:      db.Language,
 		ResultURL:            resultURL,
+		ToolID:               toolID,
 		ToolName:             toolName,
 		ToolVersion:          cliVersion,
 		Projname:             fmt.Sprintf("%s/%s", db.Owner, db.Repo),

@@ -263,8 +263,10 @@ func (b *Backend) discoverUnarchivedDatabase(ctx context.Context, dbPath string)
 	}
 
 	toolName := "codeql"
+	toolID := "codeql"
 	if language != "" && language != "unknown" {
 		toolName = fmt.Sprintf("codeql-%s", language)
+		toolID = toolName // tool_id matches tool_name format
 	}
 
 	return &api.DatabaseMetadata{
@@ -277,6 +279,7 @@ func (b *Backend) discoverUnarchivedDatabase(ctx context.Context, dbPath string)
 		IngestionDatetimeUTC: creationTime,
 		PrimaryLanguage:      language,
 		ResultURL:            resultURL,
+		ToolID:               toolID,
 		ToolName:             toolName,
 		ToolVersion:          cliVersion,
 		Projname:             fmt.Sprintf("%s/%s", owner, repo),
