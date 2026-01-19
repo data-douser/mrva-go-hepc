@@ -23,8 +23,8 @@ ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
 
-# Build the binary with static linking
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# Build the binary with static linking; let Buildx set GOARCH based on target platform
+RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags "-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildTime=${BUILD_TIME}" \
     -o /hepc-server \
     ./cmd/hepc-server
