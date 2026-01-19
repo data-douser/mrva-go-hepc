@@ -56,7 +56,7 @@ coverage-check: ## Check test coverage meets threshold (70%)
 	@echo "$(COLOR_GREEN)Checking coverage threshold...$(COLOR_RESET)"
 	@COVERAGE=$$(go tool cover -func=coverage.out | grep total | awk '{print substr($$3, 1, length($$3)-1)}'); \
 	echo "Total coverage: $${COVERAGE}%"; \
-	if [ $$(echo "$$COVERAGE < 70" | bc -l) -eq 1 ]; then \
+	if awk "BEGIN {exit !($$COVERAGE < 70)}"; then \
 		echo "$(COLOR_YELLOW)Coverage $${COVERAGE}% is below 70% threshold$(COLOR_RESET)"; \
 		exit 1; \
 	fi
